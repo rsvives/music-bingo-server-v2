@@ -63,12 +63,12 @@ io.on('connection', (socket) => {
 
         //generate numbers
     })
-    socket.on('game:next-number', ({ markedNumbers, roomId }) => {
+    socket.on('game:next-number', ({ calledNumbers, roomId }) => {
         const { initialNumbersSet } = generateInitialNumbers()
-        const markedNumbersSet = new Set(markedNumbers)
-        console.log('initial:', initialNumbersSet, 'marked:', markedNumbersSet)
+        const calledNumbersSet = new Set(calledNumbers)
+        console.log('initial:', initialNumbersSet, 'marked:', calledNumbersSet)
 
-        const availableNumbers = initialNumbersSet.difference(markedNumbersSet)
+        const availableNumbers = initialNumbersSet.difference(calledNumbersSet)
         const { randomNumber, updatedSet } = pickRandomNumber(availableNumbers)
         socket.to(roomId).emit('game:number-generated', { randomNumber, updatedSet: [...updatedSet] })
         socket.emit('game:number-generated', { randomNumber, updatedSet: [...updatedSet] })

@@ -69,9 +69,7 @@ export const joinRoom = async (data, socket) => {
             roomId: room,
             players: Object.fromEntries(roomData.players.entries()),
             numbers: roomData.numbers,
-            lastPlayerJoined: {
-                [player.id]: { ...player }
-            }
+            lastPlayerJoined: player
         }
 
         socket

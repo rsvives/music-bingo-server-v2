@@ -1,9 +1,13 @@
 import { Server } from "socket.io"
 import http from 'http'
+import superjson from 'superjson'
 import express from 'express'
 
-import { codesMap, createRoom, destroyRoom, joinRoom, roomsMap } from "../controllers/roomController.js"
+import { codesMap, createRoom, destroyRoom, joinRoom, leaveRoom, roomsMap } from "../controllers/roomController.js"
 import { generateBingoNumbers, generateInitialNumbers, pickRandomNumber } from "./bingoNumbers.js"
+import { randomId } from "./utils.js"
+import { sessionStore } from "../store/sessionStore.js"
+import { roomStore } from "../store/roomStore.js"
 
 const app = express()
 const server = http.createServer(app)
@@ -21,47 +25,85 @@ const io = new Server(server, {
 
 const sockets = new Set()
 
-io.on('connection', (socket) => {
-    console.log('user connected', socket.id)
-    sockets.add(socket.id)
-    console.log('connected sockets', sockets)
-    socket.on('room:create', (user) => createRoom(user, socket))
-    socket.on('room:join', (data) => joinRoom(data, socket))
+io.use((socket, next) => {
+    console.log('middle')
+    const user = socket.handshake.auth.user;
+    if (!user) {
+        return next(new Error("invalid user"));
+    }
+    const sessionID = socket.handshake.auth.sessionID;
+    if (sessionID) {
+        const session = sessionStore.findSession(sessionID);
+        console.log(session)
+        if (session) {
+            socket.userID = session.userID
+            socket.user = session.user
+            socket.sessionID = sessionID;
+            socket.roomId = session?.roomId
+            socket.code = session?.code
 
-    socket.on('click', (data) => {
-        const { roomId } = data
-        console.log('click', roomId)
-        socket.in(roomId).emit('clicked', { status: 'ok', ...data })
-        socket.emit('clicked', { status: 'ok', ...data })
-    })
+            console.log('middleware:recovered session', session)
+            return next();
+        }
+    }
+
+    socket.sessionID = randomId();
+    socket.userID = user.id;
+    socket.user = user;
+    console.log('middleware:new session', socket.sessionID, socket.userID)
+    next();
+});
+
+io.on('connection', (socket) => {
+    console.log('user connected', socket.id, socket.sessionID)
+
+    sessionStore.saveSession(socket.sessionID, {
+        sessionID: socket.sessionID,
+        userID: socket.userID,
+        user: socket.user,
+        roomId: socket?.roomId,
+        code: socket?.code,
+        connected: true,
+    });
+
+    socket.emit("session", {
+        sessionID: socket.sessionID,
+        user: socket.user,
+    });
+
+    socket.on('room:create', () => createRoom(socket))
+    socket.on('room:join', (data) => joinRoom(data, socket))
+    socket.on('room:leave', (data) => leaveRoom(data, socket))
+
+    // socket.on('click', (data) => {
+    //     const { roomId } = data
+    //     console.log('click', roomId)
+    //     socket.in(roomId).emit('clicked', { status: 'ok', ...data })
+    //     socket.emit('clicked', { status: 'ok', ...data })
+    // })
     socket.on('game:start', (data) => {
+        // const roomId = socket.roomId
         const { roomId } = data
-        const room = roomsMap.get(roomId)
+        const room = roomStore.findRoom(roomId)
         const { admin } = room
         const bingoNumbers = generateBingoNumbers();
         const roomPlayers = room.players
+        console.log('game:start', socket.roomId, roomPlayers)
         const iterator = roomPlayers.entries()
         const newPlayersMap = new Map()
+
         for (let i = 0; i < roomPlayers.size; i++) {
             const [k, v] = iterator.next().value
-            newPlayersMap.set(k, { ...v, numbers: bingoNumbers[i] })
+            roomPlayers.set(k, { ...v, numbers: bingoNumbers[i] })
             console.log(`bingo ${i}`, bingoNumbers[i])
         }
-        console.log(newPlayersMap)
 
-        const updatedRoom = {
-            admin,
-            numbers: [3, 4, 5, 6],
-            players: Object.fromEntries(newPlayersMap.entries())
-        }
-        roomsMap.delete(roomId)
-        roomsMap.set(roomId, updatedRoom)
+        roomStore.saveRoom(roomId, { ...room, players: roomPlayers })
+        const storedRoom = roomStore.findRoom(roomId)
 
-        console.log('game start', roomsMap.get(roomId), updatedRoom)
-        socket.in(roomId).emit('game:started', roomsMap.get(roomId))
-        socket.emit('game:started', roomsMap.get(roomId))
-
-        //generate numbers
+        const { json, meta } = superjson.serialize({ ...storedRoom })
+        socket.in(roomId).emit('game:started', { json, meta })
+        socket.emit('game:started', { json, meta })
     })
     socket.on('game:next-number', ({ calledNumbers, roomId }) => {
         const { initialNumbersSet } = generateInitialNumbers()
@@ -73,8 +115,7 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit('game:number-generated', { randomNumber, updatedSet: [...updatedSet] })
         socket.emit('game:number-generated', { randomNumber, updatedSet: [...updatedSet] })
     })
-
-
+    socket.on('game:end', (data) => console.log('game ended'))
     socket.on('disconnect', async () => {
         console.log('user disconnected', socket.id)
         destroyRoom(socket)

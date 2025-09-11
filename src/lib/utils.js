@@ -1,5 +1,5 @@
 import { randomInt, randomBytes } from 'crypto'
-import bcrypt from 'bcrypt'
+
 
 export function generate6DigitCode() {
     // 0..999999 uniformly, then pad leading zeros
@@ -17,6 +17,9 @@ export function generateRoomId(length = 10) {
     }
 
     return result;
+}
+export function randomId(length = 8) {
+    return randomBytes(length).toString("hex")
 }
 
 export function findRoomsByAdminSocket(roomsMap, socketId) {

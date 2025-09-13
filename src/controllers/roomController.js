@@ -38,7 +38,7 @@ export const createRoom = async (socket) => {
         console.log('saved sessions', sessionStore.findSession(socket.sessionID))
 
         roomStore.saveRoom(roomId, { roomId, code, admin: user })
-        const lastPlayerJoined = { ...user, sessionID: socket.sessionID, isAdmin: true }
+        const lastPlayerJoined = { ...user, sessionID: socket.sessionID, score: 0, isAdmin: true }
         roomStore.addPlayer(roomId, { playerID: user.id, player: lastPlayerJoined })
 
         //redis
@@ -74,7 +74,6 @@ export const joinRoom = async (data, socket) => {
 
 
     if (code == realCode) {
-        socket.join(room)
         console.log('code matched, all good')
 
         socket.roomId = room
@@ -84,13 +83,14 @@ export const joinRoom = async (data, socket) => {
         console.log('roomData', roomData)
 
         if (!roomData.players?.get(socket.userID)) {
-            roomStore.addPlayer(room, { playerID: socket.userID, player: socket.user })
+            roomStore.addPlayer(room, { playerID: socket.userID, player: { ...socket.user, score: 0 } })
             console.log(roomData.players)
         } else {
             console.log('rejoined')
         }
+        socket.join(room)
 
-        const { json, meta } = superjson.serialize({ ...roomData, lastPlayerJoined: socket.user })
+        const { json, meta } = superjson.serialize({ ...roomData, lastPlayerJoined: { ...socket.user, score: 0 } })
 
         socket
             .to(room)
@@ -109,7 +109,7 @@ export const leaveRoom = async (data, socket) => {
 
     } else {
         roomStore.removePlayer(socket.roomId, { playerID: socket.userID })
-
+        socket.leave(socket.roomId)
         socket.to(socket.roomId).emit('room:leaved', socket.userID)
         socket.emit('room:leaved', socket.userID)
 

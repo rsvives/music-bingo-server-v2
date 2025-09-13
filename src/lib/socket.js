@@ -71,16 +71,13 @@ io.on('connection', (socket) => {
         user: socket.user,
     });
 
+    //ROOM
     socket.on('room:create', () => createRoom(socket))
     socket.on('room:join', (data) => joinRoom(data, socket))
     socket.on('room:leave', (data) => leaveRoom(data, socket))
 
-    // socket.on('click', (data) => {
-    //     const { roomId } = data
-    //     console.log('click', roomId)
-    //     socket.in(roomId).emit('clicked', { status: 'ok', ...data })
-    //     socket.emit('clicked', { status: 'ok', ...data })
-    // })
+
+    //GAME
     socket.on('game:start', (data) => {
         // const roomId = socket.roomId
         const { roomId } = data
@@ -94,7 +91,7 @@ io.on('connection', (socket) => {
 
         for (let i = 0; i < roomPlayers.size; i++) {
             const [k, v] = iterator.next().value
-            roomPlayers.set(k, { ...v, numbers: bingoNumbers[i] })
+            roomPlayers.set(k, { ...v, marked: 0, numbers: bingoNumbers[i] })
             console.log(`bingo ${i}`, bingoNumbers[i])
         }
 
@@ -102,20 +99,50 @@ io.on('connection', (socket) => {
         const storedRoom = roomStore.findRoom(roomId)
 
         const { json, meta } = superjson.serialize({ ...storedRoom })
-        socket.in(roomId).emit('game:started', { json, meta })
+        socket.to(roomId).emit('game:started', { json, meta })
         socket.emit('game:started', { json, meta })
     })
-    socket.on('game:next-number', ({ calledNumbers, roomId }) => {
+    socket.on('game:pause', () => {
+        socket.to(socket.roomId).emit('game:paused')
+        socket.emit('game:paused')
+    })
+    socket.on('game:next-number', ({ calledNumbers }) => {
         const { initialNumbersSet } = generateInitialNumbers()
         const calledNumbersSet = new Set(calledNumbers)
-        console.log('initial:', initialNumbersSet, 'marked:', calledNumbersSet)
 
         const availableNumbers = initialNumbersSet.difference(calledNumbersSet)
         const { randomNumber, updatedSet } = pickRandomNumber(availableNumbers)
-        socket.to(roomId).emit('game:number-generated', { randomNumber, updatedSet: [...updatedSet] })
-        socket.emit('game:number-generated', { randomNumber, updatedSet: [...updatedSet] })
+        if (updatedSet.size > 0) {
+            socket.to(socket.roomId).emit('game:number-generated', { randomNumber, updatedSet: [...updatedSet] })
+            socket.emit('game:number-generated', { randomNumber, updatedSet: [...updatedSet] })
+        } else {
+            socket.to(socket.roomId).emit('game:ended')
+            socket.emit('game:ended')
+
+        }
     })
-    socket.on('game:end', (data) => console.log('game ended'))
+    socket.on('game:mark-number', (score) => {
+        //should check if its true
+        socket.emit('player:marked', socket.userID, score)
+        socket.to(socket.roomId).emit('player:marked', socket.userID, score)
+    })
+    socket.on('game:line', () => {
+        //should check if its true
+        socket.emit('player:line', socket.userID)
+        socket.to(socket.roomId).emit('player:line', socket.userID)
+    })
+    socket.on('game:bingo', () => {
+        //should check if its true
+        socket.emit('player:bingo', socket.userID)
+        socket.to(socket.roomId).emit('player:bingo', socket.userID)
+    })
+    socket.on('game:end', (data) => {
+        console.log('game ended')
+        socket.to(socket.roomId).emit('game:ended')
+        socket.emit('game:ended')
+    })
+
+
     socket.on('disconnect', async () => {
         console.log('user disconnected', socket.id)
         destroyRoom(socket)

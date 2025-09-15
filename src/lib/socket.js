@@ -1,4 +1,5 @@
 import { Server } from "socket.io"
+import { instrument } from "@socket.io/admin-ui"
 import http from 'http'
 import superjson from 'superjson'
 import express from 'express'
@@ -8,6 +9,7 @@ import { generateBingoNumbers, generateInitialNumbers, pickRandomNumber } from "
 import { randomId } from "./utils.js"
 import { sessionStore } from "../store/sessionStore.js"
 import { roomStore } from "../store/roomStore.js"
+import { redisClient } from "./cache.js"
 
 const app = express()
 const server = http.createServer(app)
@@ -22,6 +24,7 @@ const io = new Server(server, {
         // skipMiddlewares: true
     }
 })
+instrument(io, { auth: false, mode: "development", })
 
 const sockets = new Set()
 
@@ -87,7 +90,6 @@ io.on('connection', (socket) => {
         const roomPlayers = room.players
         console.log('game:start', socket.roomId, roomPlayers)
         const iterator = roomPlayers.entries()
-        const newPlayersMap = new Map()
 
         for (let i = 0; i < roomPlayers.size; i++) {
             const [k, v] = iterator.next().value
@@ -97,14 +99,22 @@ io.on('connection', (socket) => {
 
         roomStore.saveRoom(roomId, { ...room, players: roomPlayers })
         const storedRoom = roomStore.findRoom(roomId)
-
+        console.log(storedRoom)
         const { json, meta } = superjson.serialize({ ...storedRoom })
         socket.to(roomId).emit('game:started', { json, meta })
         socket.emit('game:started', { json, meta })
     })
+    socket.on('game:restart', () => {
+        socket.to(socket.roomId).emit('game:restarted')
+        socket.emit('game:restarted')
+    })
     socket.on('game:pause', () => {
         socket.to(socket.roomId).emit('game:paused')
         socket.emit('game:paused')
+    })
+    socket.on('game:resume', () => {
+        socket.to(socket.roomId).emit('game:resumed')
+        socket.emit('game:resumed')
     })
     socket.on('game:next-number', ({ calledNumbers }) => {
         const { initialNumbersSet } = generateInitialNumbers()
@@ -136,9 +146,11 @@ io.on('connection', (socket) => {
         socket.emit('player:bingo', socket.userID)
         socket.to(socket.roomId).emit('player:bingo', socket.userID)
     })
-    socket.on('game:end', (data) => {
+    socket.on('game:end', async (data) => {
         console.log('game ended')
         socket.to(socket.roomId).emit('game:ended')
+        const savedRooms = await redisClient.get('roomCodes')
+        // savedRooms.
         socket.emit('game:ended')
     })
 

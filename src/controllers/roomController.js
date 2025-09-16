@@ -18,7 +18,7 @@ export const createRoom = async (socket) => {
     const { user } = socket
     const storedSession = sessionStore.findSession(socket.sessionID)
 
-    if (!storedSession.roomId) { // !socket.room
+    if (!storedSession || !storedSession?.roomId || !socket?.roomId) { // !socket.room
         console.log('creating room', user)
 
         const roomId = generateRoomId()
@@ -78,6 +78,9 @@ export const joinRoom = async (data, socket) => {
 
         socket.roomId = room
         socket.code = code
+
+        const savedStore = sessionStore.findSession(socket.sessionID)
+        sessionStore.saveSession(socket.sessionID, { ...savedStore, roomId: room, code })
 
         const roomData = roomStore.findRoom(room)
         console.log('roomData', roomData)

@@ -31,13 +31,14 @@ const sockets = new Set()
 io.use((socket, next) => {
     console.log('middle')
     const user = socket.handshake.auth.user;
+
     if (!user) {
         return next(new Error("invalid user"));
     }
     const sessionID = socket.handshake.auth.sessionID;
     if (sessionID) {
         const session = sessionStore.findSession(sessionID);
-        console.log(session)
+        // console.log(session)
         if (session) {
             socket.userID = session.userID
             socket.user = session.user
@@ -45,6 +46,7 @@ io.use((socket, next) => {
             socket.roomId = session?.roomId
             socket.code = session?.code
 
+            socket.join(session.roomId)
             console.log('middleware:recovered session', session)
             return next();
         }
@@ -150,6 +152,17 @@ io.on('connection', (socket) => {
         console.log('game ended')
         socket.to(socket.roomId).emit('game:ended')
         const savedRooms = await redisClient.get('roomCodes')
+        sessionStore.deleteSession(socket.sessionID)
+        console.log('isAdmin', socket.user)
+        if (socket.user.isAdmin) {
+            roomStore.removeRoom(socket.roomId)
+        }
+        console.log('leaving', socket.user.id)
+        socket.leave(socket.roomId)
+        socket.roomId = null
+        // socket.sessionID = null
+        // socket.user = null
+        // socket.userID = null
         // savedRooms.
         socket.emit('game:ended')
     })

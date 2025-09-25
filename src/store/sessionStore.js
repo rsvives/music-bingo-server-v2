@@ -5,6 +5,8 @@
 }
 
 class InMemorySessionStore extends SessionStore {
+    sessions;
+
     constructor() {
         super();
         this.sessions = new Map();

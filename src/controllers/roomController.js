@@ -32,7 +32,7 @@ export const createRoom = async (socket) => {
 
         roomStore.saveRoom(roomId, { roomId, code, admin: user })
         console.log('saved room', roomStore.findRoom(roomId))
-        const lastPlayerJoined = { ...user, sessionID: socket.sessionID, score: 0, markedNumbers: new Set(), isAdmin: true }
+        const lastPlayerJoined = { ...user, sessionID: socket.sessionID, score: 0, markedNumbers: new Set(), isAdmin: true, connected: true }
         roomStore.addPlayer(roomId, { playerID: user.id, player: lastPlayerJoined })
 
 
@@ -71,7 +71,7 @@ export const joinRoom = async (data, socket) => {
         console.log('roomData', roomData)
 
         if (!roomData.players?.get(socket.userID)) {
-            roomStore.addPlayer(room, { playerID: socket.userID, player: { ...socket.user, score: 0, markedNumbers: new Set() } })
+            roomStore.addPlayer(room, { playerID: socket.userID, player: { ...socket.user, score: 0, markedNumbers: new Set(), connected: true } })
             console.log(roomData.players)
         } else {
             console.log('rejoined')

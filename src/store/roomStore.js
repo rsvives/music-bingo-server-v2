@@ -47,7 +47,7 @@ class InMemoryRoomStore extends RoomStore {
         }
     }
     findMarkedNumbers(roomId, playerId) {
-        console.log('find marked', roomId)
+        // console.log('find marked', roomId)
         const room = this.findRoom(roomId)
         const player = room?.players.get(playerId)
 
@@ -63,7 +63,7 @@ class InMemoryRoomStore extends RoomStore {
 
     }
     addMarkedNumber(roomId, playerId, number) {
-        console.log('add marked', roomId, playerId, number)
+        // console.log('add marked', roomId, playerId, number)
         const markedNumbers = this.findMarkedNumbers(roomId, playerId)
         markedNumbers.add(number)
 

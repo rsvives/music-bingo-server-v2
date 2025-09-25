@@ -53,7 +53,10 @@ io.use((socket, next) => {
             socket.roomId = session?.roomId
             socket.code = session?.code
 
-            socket.join(session.roomId)
+            if (roomStore.checkCode(session.roomId, session.code)) {
+                socket.join(session.roomId)
+                socket.to(socket.roomId).emit('player:rejoined', socket.user)
+            }
             console.log('middleware:recovered session', session, roomStore.findRoom(socket.roomId))
             return next();
         }
@@ -110,8 +113,8 @@ io.on('connection', (socket) => {
     // socket.on('player:disconnected')
 
     socket.on('disconnect', async () => {
-        socket.to(socket.roomId).emit('player:disconnected', socket.userID)
-        console.log('user disconnected', socket.id)
+        socket.to(socket.roomId).emit('player:disconnected', socket.user)
+        console.log('user disconnected', socket.user)
         destroyRoom(socket)
         sockets.delete(socket.id)
         console.log('remaining sockets', sockets)

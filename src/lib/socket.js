@@ -1,22 +1,29 @@
 import { Server } from "socket.io"
 import { instrument } from "@socket.io/admin-ui"
 import http from 'http'
-import superjson from 'superjson'
 import express from 'express'
-
-import { codesMap, createRoom, destroyRoom, joinRoom, leaveRoom, roomsMap } from "../controllers/roomController.js"
-import { generateBingoNumbers, generateInitialNumbers, pickRandomNumber } from "./bingoNumbers.js"
+import superjson from 'superjson'
+import { createRoom, destroyRoom, joinRoom, leaveRoom } from "../controllers/roomController.js"
+// import { generateBingoNumbers, generateInitialNumbers, pickRandomNumber } from "./bingoNumbers.js"
 import { randomId } from "./utils.js"
 import { sessionStore } from "../store/sessionStore.js"
+// import { roomStore } from "../store/roomStore.js"
+// import { redisClient } from "./cache.js"
+import { endGame, pauseGame, restartGame, resumeGame, startGame } from "../controllers/gameController.js"
+import { bingoMarked, lineMarked, markNumber, nextNumber } from "../controllers/numberController.js"
 import { roomStore } from "../store/roomStore.js"
-import { redisClient } from "./cache.js"
 
 const app = express()
 const server = http.createServer(app)
 
 const io = new Server(server, {
     cors: {
-        origin: ['http://localhost:3000', 'http://192.168.1.149:3000', 'http://192.168.68.113:3000']
+        origin: [
+            'http://localhost:3000',
+            'http://192.168.1.149:3000',
+            'http://192.168.68.113:3000',
+            'http://192.168.0.75:3000'
+        ]
 
     },
     connectionStateRecovery: {
@@ -47,7 +54,7 @@ io.use((socket, next) => {
             socket.code = session?.code
 
             socket.join(session.roomId)
-            console.log('middleware:recovered session', session)
+            console.log('middleware:recovered session', session, roomStore.findRoom(socket.roomId))
             return next();
         }
     }
@@ -71,104 +78,39 @@ io.on('connection', (socket) => {
         connected: true,
     });
 
-    socket.emit("session", {
+    const { meta, json } = superjson.serialize({
         sessionID: socket.sessionID,
         user: socket.user,
-    });
+        bingoNumbers: roomStore.findRoom(socket.roomId)?.players.get(socket.userID)?.numbers ?? null,
+        markedNumbers: roomStore.findMarkedNumbers(socket.roomId, socket.userID) ?? new Set(),
+        calledNumbers: roomStore.findCalledNumbers(socket.roomId)
+    })
+
+    socket.emit("session", { meta, json });
 
     //ROOM
     socket.on('room:create', () => createRoom(socket))
     socket.on('room:join', (data) => joinRoom(data, socket))
     socket.on('room:leave', (data) => leaveRoom(data, socket))
 
-
     //GAME
-    socket.on('game:start', (data) => {
-        // const roomId = socket.roomId
-        const { roomId } = data
-        const room = roomStore.findRoom(roomId)
-        const { admin } = room
-        const bingoNumbers = generateBingoNumbers();
-        const roomPlayers = room.players
-        console.log('game:start', socket.roomId, roomPlayers)
-        const iterator = roomPlayers.entries()
+    socket.on('game:start', (data) => startGame(socket, data))
+    socket.on('game:restart', () => restartGame(socket))
+    socket.on('game:pause', () => pauseGame(socket))
+    socket.on('game:resume', () => resumeGame(socket))
+    socket.on('game:end', () => endGame(socket))
 
-        for (let i = 0; i < roomPlayers.size; i++) {
-            const [k, v] = iterator.next().value
-            roomPlayers.set(k, { ...v, marked: 0, numbers: bingoNumbers[i] })
-            console.log(`bingo ${i}`, bingoNumbers[i])
-        }
+    //NUMBERS
+    socket.on('number:next', () => nextNumber(socket))
+    socket.on('number:mark', (score, number) => markNumber(score, socket, number))
+    socket.on('number:line', () => lineMarked(socket))
+    socket.on('number:bingo', () => bingoMarked(socket))
 
-        roomStore.saveRoom(roomId, { ...room, players: roomPlayers })
-        const storedRoom = roomStore.findRoom(roomId)
-        console.log(storedRoom)
-        const { json, meta } = superjson.serialize({ ...storedRoom })
-        socket.to(roomId).emit('game:started', { json, meta })
-        socket.emit('game:started', { json, meta })
-    })
-    socket.on('game:restart', () => {
-        socket.to(socket.roomId).emit('game:restarted')
-        socket.emit('game:restarted')
-    })
-    socket.on('game:pause', () => {
-        socket.to(socket.roomId).emit('game:paused')
-        socket.emit('game:paused')
-    })
-    socket.on('game:resume', () => {
-        socket.to(socket.roomId).emit('game:resumed')
-        socket.emit('game:resumed')
-    })
-    socket.on('game:next-number', ({ calledNumbers }) => {
-        const { initialNumbersSet } = generateInitialNumbers()
-        const calledNumbersSet = new Set(calledNumbers)
 
-        const availableNumbers = initialNumbersSet.difference(calledNumbersSet)
-        const { randomNumber, updatedSet } = pickRandomNumber(availableNumbers)
-        if (updatedSet.size > 0) {
-            socket.to(socket.roomId).emit('game:number-generated', { randomNumber, updatedSet: [...updatedSet] })
-            socket.emit('game:number-generated', { randomNumber, updatedSet: [...updatedSet] })
-        } else {
-            socket.to(socket.roomId).emit('game:ended')
-            socket.emit('game:ended')
-
-        }
-    })
-    socket.on('game:mark-number', (score) => {
-        //should check if its true
-        socket.emit('player:marked', socket.userID, score)
-        socket.to(socket.roomId).emit('player:marked', socket.userID, score)
-    })
-    socket.on('game:line', () => {
-        //should check if its true
-        socket.emit('player:line', socket.userID)
-        socket.to(socket.roomId).emit('player:line', socket.userID)
-    })
-    socket.on('game:bingo', () => {
-        //should check if its true
-        socket.emit('player:bingo', socket.userID)
-        socket.to(socket.roomId).emit('player:bingo', socket.userID)
-    })
-    socket.on('game:end', async (data) => {
-        console.log('game ended')
-        socket.to(socket.roomId).emit('game:ended')
-        const savedRooms = await redisClient.get('roomCodes')
-        sessionStore.deleteSession(socket.sessionID)
-        console.log('isAdmin', socket.user)
-        if (socket.user.isAdmin) {
-            roomStore.removeRoom(socket.roomId)
-        }
-        console.log('leaving', socket.user.id)
-        socket.leave(socket.roomId)
-        socket.roomId = null
-        // socket.sessionID = null
-        // socket.user = null
-        // socket.userID = null
-        // savedRooms.
-        socket.emit('game:ended')
-    })
-
+    // socket.on('player:disconnected')
 
     socket.on('disconnect', async () => {
+        socket.to(socket.roomId).emit('player:disconnected', socket.userID)
         console.log('user disconnected', socket.id)
         destroyRoom(socket)
         sockets.delete(socket.id)

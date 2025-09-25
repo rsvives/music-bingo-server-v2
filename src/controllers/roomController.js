@@ -6,13 +6,6 @@ import { findRoomByAdminId, findRoomsByAdminSocket, generate6DigitCode, generate
 import { roomStore } from "../store/roomStore.js"
 import { sessionStore } from "../store/sessionStore.js"
 
-
-export const codesMap = new Map()
-export const roomsMap = new Map()
-export const usersMap = new Map()
-
-console.log('size', codesMap.size)
-
 export const createRoom = async (socket) => {
 
     const { user } = socket
@@ -38,16 +31,11 @@ export const createRoom = async (socket) => {
         console.log('saved sessions', sessionStore.findSession(socket.sessionID))
 
         roomStore.saveRoom(roomId, { roomId, code, admin: user })
-        const lastPlayerJoined = { ...user, sessionID: socket.sessionID, score: 0, isAdmin: true }
+        console.log('saved room', roomStore.findRoom(roomId))
+        const lastPlayerJoined = { ...user, sessionID: socket.sessionID, score: 0, markedNumbers: new Set(), isAdmin: true }
         roomStore.addPlayer(roomId, { playerID: user.id, player: lastPlayerJoined })
 
-        //redis
-        const savedRedisData = await JSON.parse(await redisClient.get('roomCodes'))
-        const newValue = {}
-        newValue[roomId] = code
-        const newRedisData = { ...savedRedisData, ...newValue }
-        const updatedRedisData = await redisClient.set('roomCodes', JSON.stringify(newRedisData))
-        console.log('saved redis data', updatedRedisData, roomId)
+
 
         socket.join(roomId)
 
@@ -69,11 +57,8 @@ export const joinRoom = async (data, socket) => {
 
     const { room, code } = data
 
-    const savedRedisData = await JSON.parse(await redisClient.get('roomCodes'))
-    const realCode = savedRedisData[room]
 
-
-    if (code == realCode) {
+    if (roomStore.checkCode(room, code)) {
         console.log('code matched, all good')
 
         socket.roomId = room
@@ -86,13 +71,14 @@ export const joinRoom = async (data, socket) => {
         console.log('roomData', roomData)
 
         if (!roomData.players?.get(socket.userID)) {
-            roomStore.addPlayer(room, { playerID: socket.userID, player: { ...socket.user, score: 0 } })
+            roomStore.addPlayer(room, { playerID: socket.userID, player: { ...socket.user, score: 0, markedNumbers: new Set() } })
             console.log(roomData.players)
         } else {
             console.log('rejoined')
+            console.log(roomStore.findRoom(socket.roomId))
         }
         socket.join(room)
-
+        console.log('join', roomData)
         const { json, meta } = superjson.serialize({ ...roomData, lastPlayerJoined: { ...socket.user, score: 0 } })
 
         socket
@@ -123,45 +109,41 @@ export const leaveRoom = async (data, socket) => {
 }
 
 export const destroyRoom = async (socket) => {
-    console.log('removing rooms')
-    const adminId = usersMap.get(socket.id)
+    // console.log('removing rooms')
+    // const adminId = usersMap.get(socket.id)
 
-    const roomIds = adminId ? findRoomByAdminId({ roomsMap, userId: adminId }) : null
-    if (roomIds) {
+    // const roomIds = adminId ? findRoomByAdminId({ roomsMap, userId: adminId }) : null
+    // if (roomIds) {
 
-        const redisData = await JSON.parse(await redisClient.get('roomCodes'))
-        console.log('delete redis', redisData)
-        for (let key of roomIds) {
-            roomsMap.delete(key)
-            codesMap.delete(key)
-            if (redisData && redisData[key]) delete redisData[key]
-        }
+    //     const redisData = await JSON.parse(await redisClient.get('roomCodes'))
+    //     console.log('delete redis', redisData)
+    //     for (let key of roomIds) {
+    //         roomsMap.delete(key)
+    //         codesMap.delete(key)
+    //         if (redisData && redisData[key]) delete redisData[key]
+    //     }
 
-        usersMap.delete(socket.id)
-        const updatedRedisData = await redisClient.set('roomCodes', JSON.stringify(redisData))
-        console.log(roomsMap, codesMap)
-        console.log('redis', updatedRedisData)
-    } else {
-        console.log('no rooms for user')
-    }
+    //     usersMap.delete(socket.id)
+    //     const updatedRedisData = await redisClient.set('roomCodes', JSON.stringify(redisData))
+    //     console.log(roomsMap, codesMap)
+    //     console.log('redis', updatedRedisData)
+    // } else {
+    //     console.log('no rooms for user')
+    // }
 }
 
 
 export const roomCheck = async (req, res) => {
     const { roomId, code } = req.body
-    const redisRoomCodes = await JSON.parse(await redisClient.get('roomCodes'))
 
-    const realCode = redisRoomCodes[roomId]
     const room = roomStore.findRoom(roomId)
 
-    console.log('checking', roomId, code, realCode, room)
+
 
     if (!room) return res.status(404).send({ message: 'room not found' })
-    if (realCode != code) return res.status(301).send({ message: 'wrong code' })
+    if (roomStore.checkCode(roomId, code)) return res.status(301).send({ message: 'wrong code' })
 
 
     const { json, meta } = superjson.serialize(room)
     res.status(200).send({ json, meta })
-
-
 }

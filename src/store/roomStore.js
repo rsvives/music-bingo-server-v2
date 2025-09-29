@@ -78,9 +78,7 @@ class InMemoryRoomStore extends RoomStore {
     }
     addCalledNumber(roomId, number) {
         const calledNumbers = this.findCalledNumbers(roomId)
-        console.log('before adding', calledNumbers, number)
         calledNumbers.add(number)
-        console.log('added', calledNumbers)
         return calledNumbers
     }
     findCalledNumbers(roomId) {

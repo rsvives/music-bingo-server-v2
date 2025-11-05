@@ -1,17 +1,16 @@
 import { generateInitialNumbers, pickRandomNumber } from "../lib/bingoNumbers.js"
-import superjson from 'superjson'
 import { roomStore } from "../store/roomStore.js"
 
 export const nextNumber = (socket) => {
     const { initialNumbersSet } = generateInitialNumbers()
-    console.log('next number', socket?.roomId)
+    //console.log('next number', socket?.roomId)
     const calledNumbersSet = roomStore.findCalledNumbers(socket.roomId)
 
     const availableNumbers = initialNumbersSet.difference(calledNumbersSet)
     const { randomNumber, updatedSet } = pickRandomNumber(availableNumbers)
     const updatedCalledNumbers = roomStore.addCalledNumber(socket.roomId, randomNumber)
 
-    console.log('calledNumbers', calledNumbersSet, randomNumber)
+    //console.log('calledNumbers', calledNumbersSet, randomNumber)
     if (updatedSet.size > 0) {
         socket.to(socket.roomId).emit('game:number-generated', { randomNumber, calledNumbers: [...updatedCalledNumbers] })
         socket.emit('game:number-generated', { randomNumber, calledNumbers: [...updatedCalledNumbers] })

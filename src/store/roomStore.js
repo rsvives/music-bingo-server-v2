@@ -18,7 +18,7 @@ class InMemoryRoomStore extends RoomStore {
         // TODO: add redis layer
         return this.rooms.get(id)
     }
-    saveRoom(id, { roomId, code, admin, players = new Map(), calledNumbers = new Set() }) {
+    saveRoom(id, { roomId, code, admin, players = new Map(), calledNumbers = new Set(), gameStatus }) {
         // TODO: add redis layer
         //redis
         // const savedRedisData = await JSON.parse(await redisClient.get('roomCodes'))
@@ -26,9 +26,9 @@ class InMemoryRoomStore extends RoomStore {
         // newValue[roomId] = code
         // const newRedisData = { ...savedRedisData, ...newValue }
         // const updatedRedisData = await redisClient.set('roomCodes', JSON.stringify(newRedisData))
-        // console.log('saved redis data', updatedRedisData, roomId)
+        // //console.log('saved redis data', updatedRedisData, roomId)
 
-        this.rooms.set(id, { roomId, code, admin, players, calledNumbers })
+        this.rooms.set(id, { roomId, code, admin, players, calledNumbers, gameStatus })
     }
     checkCode(roomId, code) {
 
@@ -39,6 +39,10 @@ class InMemoryRoomStore extends RoomStore {
 
         return code === this.findRoom(roomId)?.code
     }
+    changeGameStatus(roomId, status = 'started' || 'paused' || 'ended' || 'waiting') {
+        const room = this.findRoom(roomId)
+        this.saveRoom(roomId, { ...room, gameStatus: status })
+    }
     addPlayer(id, { playerID, player }) {
         const room = this.findRoom(id)
         if (!room.players.get(playerID)) {
@@ -47,7 +51,7 @@ class InMemoryRoomStore extends RoomStore {
         }
     }
     findMarkedNumbers(roomId, playerId) {
-        // console.log('find marked', roomId)
+        // //console.log('find marked', roomId)
         const room = this.findRoom(roomId)
         const player = room?.players.get(playerId)
 
@@ -63,7 +67,7 @@ class InMemoryRoomStore extends RoomStore {
 
     }
     addMarkedNumber(roomId, playerId, number) {
-        // console.log('add marked', roomId, playerId, number)
+        // //console.log('add marked', roomId, playerId, number)
         const markedNumbers = this.findMarkedNumbers(roomId, playerId)
         markedNumbers.add(number)
 
@@ -83,7 +87,7 @@ class InMemoryRoomStore extends RoomStore {
     }
     findCalledNumbers(roomId) {
         const room = this.findRoom(roomId)
-        // console.log('foundcalled numbers', room?.calledNumbers)
+        // //console.log('foundcalled numbers', room?.calledNumbers)
 
         return room?.calledNumbers ?? new Set()
     }

@@ -8,7 +8,7 @@ export const generateInitialNumbers = (maxNumero = 90) => {
 
 export const generateBingoNumbers = ({ cantidadCartones = 6, numerosPorCarton = 15, maxNumero = 90, jugadores = 1 }) => {
     const cards = []
-    console.log(jugadores)
+    //console.log(jugadores)
 
     for (let v = 1; v <= Math.ceil(jugadores / cantidadCartones); v++) {
         const { initialNumbersSet } = generateInitialNumbers()
@@ -18,7 +18,7 @@ export const generateBingoNumbers = ({ cantidadCartones = 6, numerosPorCarton = 
                 const set = new Set()
                 while (set.size < 15) {
                     const randomNumberIndex = Math.floor(Math.random() * initialNumbersSet.size)
-                    // console.log(randomNumberIndex)
+                    // //console.log(randomNumberIndex)
                     const numbersArray = Array.from(initialNumbersSet)
                     const chosenValue = numbersArray[randomNumberIndex]
                     set.add(chosenValue)
@@ -26,9 +26,9 @@ export const generateBingoNumbers = ({ cantidadCartones = 6, numerosPorCarton = 
                 }
                 return Array.from(set)
             })
-            //console.log(cardboard)
+            ////console.log(cardboard)
             const orderedCardboard = cardboard.sort((a, b) => a - b)
-            //console.log(i,orderedCardboard)
+            ////console.log(i,orderedCardboard)
             const columnsArray = [
                 orderedCardboard.slice(0, 3),
                 orderedCardboard.slice(3, 6),
@@ -42,12 +42,12 @@ export const generateBingoNumbers = ({ cantidadCartones = 6, numerosPorCarton = 
                 columnsArray.map(row => row[colIndex])
             )
 
-            console.log('transposed', transposedCard)
+            //console.log('transposed', transposedCard)
             cards.push(transposedCard)
         }
     }
 
-    console.log('generating bingo', cards)
+    //console.log('generating bingo', cards)
     return cards
 }
 

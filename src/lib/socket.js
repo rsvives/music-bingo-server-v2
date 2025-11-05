@@ -9,7 +9,7 @@ import { randomId } from "./utils.js"
 import { sessionStore } from "../store/sessionStore.js"
 // import { roomStore } from "../store/roomStore.js"
 // import { redisClient } from "./cache.js"
-import { endGame, pauseGame, restartGame, resumeGame, startGame } from "../controllers/gameController.js"
+import { endGame, pauseGame, restartGame, resumeGame, startGame, terminateGame } from "../controllers/gameController.js"
 import { bingoMarked, lineMarked, markNumber, nextNumber } from "../controllers/numberController.js"
 import { roomStore } from "../store/roomStore.js"
 
@@ -36,7 +36,7 @@ instrument(io, { auth: false, mode: "development", })
 const sockets = new Set()
 
 io.use((socket, next) => {
-    console.log('middle')
+    //console.log('middle')
     const user = socket.handshake.auth.user;
 
     if (!user) {
@@ -45,19 +45,21 @@ io.use((socket, next) => {
     const sessionID = socket.handshake.auth.sessionID;
     if (sessionID) {
         const session = sessionStore.findSession(sessionID);
-        // console.log(session)
+        // //console.log(session)
         if (session) {
             socket.userID = session.userID
             socket.user = session.user
             socket.sessionID = sessionID;
             socket.roomId = session?.roomId
             socket.code = session?.code
+            socket.gameStatus = roomStore.findRoom(socket?.roomId)?.gameStatus || 'waiting'
 
+            //check this👇 ...
             if (roomStore.checkCode(session.roomId, session.code)) {
                 socket.join(session.roomId)
                 socket.to(socket.roomId).emit('player:rejoined', socket.user)
             }
-            console.log('middleware:recovered session', session, roomStore.findRoom(socket.roomId))
+            //console.log('middleware:recovered session', session, roomStore.findRoom(socket.roomId))
             return next();
         }
     }
@@ -65,12 +67,15 @@ io.use((socket, next) => {
     socket.sessionID = randomId();
     socket.userID = user.id;
     socket.user = user;
-    console.log('middleware:new session', socket.sessionID, socket.userID)
+    socket.roomId = null
+    socket.code = null
+    socket.gameStatus = null
+    //console.log('middleware:new session', socket.sessionID, socket.userID)
     next();
 });
 
 io.on('connection', (socket) => {
-    console.log('user connected', socket.id, socket.sessionID)
+    //console.log('user connected', socket.id, socket.sessionID)
 
     sessionStore.saveSession(socket.sessionID, {
         sessionID: socket.sessionID,
@@ -78,6 +83,7 @@ io.on('connection', (socket) => {
         user: socket.user,
         roomId: socket?.roomId,
         code: socket?.code,
+        gameStatus: roomStore.findRoom(socket?.roomId)?.gameStatus || 'waiting',
         connected: true,
     });
 
@@ -102,6 +108,7 @@ io.on('connection', (socket) => {
     socket.on('game:pause', () => pauseGame(socket))
     socket.on('game:resume', () => resumeGame(socket))
     socket.on('game:end', () => endGame(socket))
+    socket.on('game:terminate', () => terminateGame(socket))
 
     //NUMBERS
     socket.on('number:next', () => nextNumber(socket))
@@ -114,10 +121,10 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', async () => {
         socket.to(socket.roomId).emit('player:disconnected', socket.user)
-        console.log('user disconnected', socket.user)
-        destroyRoom(socket)
+        //console.log('user disconnected', socket.user)
+        // destroyRoom(socket)
         sockets.delete(socket.id)
-        console.log('remaining sockets', sockets)
+        //console.log('remaining sockets', sockets)
 
     })
 })

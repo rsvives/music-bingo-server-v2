@@ -18,13 +18,9 @@ const server = http.createServer(app)
 
 const io = new Server(server, {
     cors: {
-        origin: [
-            'http://localhost:3000',
-            'http://192.168.1.149:3000',
-            'http://192.168.68.113:3000',
-            'http://192.168.0.75:3000',
+        origin:
             'https://flabingo.vercel.app/'
-        ]
+
 
     },
     connectionStateRecovery: {

@@ -22,7 +22,8 @@ const io = new Server(server, {
             'http://localhost:3000',
             'http://192.168.1.149:3000',
             'http://192.168.68.113:3000',
-            'http://192.168.0.75:3000'
+            'http://192.168.0.75:3000',
+            'https://flabingo.vercel.app'
         ]
 
     },

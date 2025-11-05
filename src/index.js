@@ -10,7 +10,7 @@ dotenv.config()
 const PORT = process.env.PORT
 
 app.use(cors({
-    'origin': ['http://localhost:3000', 'https://flabingo.vercel.app']
+    'origin': ['http://localhost:3000', 'https://flabingo.vercel.app/']
 }))
 app.use(express.json())
 app.use('/api/auth', authRoutes)
